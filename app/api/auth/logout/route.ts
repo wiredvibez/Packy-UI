@@ -1,12 +1,9 @@
-import { SESSION_COOKIE } from "@/lib/auth/session";
+import { serializeSessionCookie } from "@/lib/auth/session";
 
 export const dynamic = "force-dynamic";
 
 export async function POST() {
   const response = Response.json({ ok: true });
-  response.headers.append(
-    "Set-Cookie",
-    `${SESSION_COOKIE}=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax`,
-  );
+  response.headers.append("Set-Cookie", serializeSessionCookie("", 0));
   return response;
 }

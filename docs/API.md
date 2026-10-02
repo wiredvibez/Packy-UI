@@ -152,6 +152,8 @@ Sets `archived: true`.
 
 `ordered` · `processing` · `shipped` · `in_transit` · `customs` · `out_for_delivery` · `at_pickup_point` · `delivered` · `failed_attempt` · `exception` · `returned` · `cancelled`
 
+`trackingUrl`, link `url`s, and item `image`s must be `http` or `https`. `javascript:` and `data:` are rejected.
+
 ## Link kinds
 
 `email` · `order` · `tracking` · `message` · `other`

@@ -19,12 +19,17 @@ export function isSessionSecretConfigured(): boolean {
   return getSessionSecret() !== null;
 }
 
+export function sessionVersion(): string {
+  const value = process.env.SESSION_VERSION?.trim();
+  return value || "1";
+}
+
 export async function createSessionToken(): Promise<string> {
   const secret = getSessionSecret();
   if (!secret) {
     throw new Error("SESSION_SECRET is missing or shorter than 16 characters");
   }
-  return new SignJWT({ sub: SESSION_SUBJECT })
+  return new SignJWT({ sub: SESSION_SUBJECT, ver: sessionVersion() })
     .setProtectedHeader({ alg: "HS256" })
     .setIssuedAt()
     .setExpirationTime(`${SESSION_MAX_AGE_SEC}s`)
@@ -47,6 +52,7 @@ async function readToken(token: string | undefined | null) {
       algorithms: ["HS256"],
     });
     if (payload.sub !== SESSION_SUBJECT) return null;
+    if (payload.ver !== sessionVersion()) return null;
     return payload;
   } catch {
     return null;
@@ -78,6 +84,22 @@ export function sessionCookieOptions() {
     path: "/",
     maxAge: SESSION_MAX_AGE_SEC,
   };
+}
+
+export function serializeSessionCookie(
+  value: string,
+  maxAge = SESSION_MAX_AGE_SEC,
+): string {
+  const options = sessionCookieOptions();
+  const parts = [
+    `${SESSION_COOKIE}=${encodeURIComponent(value)}`,
+    `Path=${options.path}`,
+    `Max-Age=${maxAge}`,
+    `SameSite=${options.sameSite}`,
+  ];
+  if (options.httpOnly) parts.push("HttpOnly");
+  if (options.secure) parts.push("Secure");
+  return parts.join("; ");
 }
 
 export async function hasSessionFromCookieStore(

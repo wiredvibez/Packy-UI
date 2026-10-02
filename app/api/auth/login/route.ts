@@ -7,11 +7,7 @@ import {
   consumeLoginAttempt,
   getClientIp,
 } from "@/lib/auth/rate-limit";
-import {
-  createSessionToken,
-  SESSION_COOKIE,
-  sessionCookieOptions,
-} from "@/lib/auth/session";
+import { createSessionToken, serializeSessionCookie } from "@/lib/auth/session";
 
 export const dynamic = "force-dynamic";
 
@@ -61,31 +57,6 @@ export async function POST(request: NextRequest) {
     return jsonError(500, "session_not_configured");
   }
   const response = Response.json({ ok: true });
-  response.headers.append(
-    "Set-Cookie",
-    serializeCookie(SESSION_COOKIE, token, sessionCookieOptions()),
-  );
+  response.headers.append("Set-Cookie", serializeSessionCookie(token));
   return response;
-}
-
-function serializeCookie(
-  name: string,
-  value: string,
-  options: {
-    httpOnly: boolean;
-    secure: boolean;
-    sameSite: "lax" | "strict" | "none";
-    path: string;
-    maxAge: number;
-  },
-): string {
-  const parts = [
-    `${name}=${encodeURIComponent(value)}`,
-    `Path=${options.path}`,
-    `Max-Age=${options.maxAge}`,
-    `SameSite=${options.sameSite}`,
-  ];
-  if (options.httpOnly) parts.push("HttpOnly");
-  if (options.secure) parts.push("Secure");
-  return parts.join("; ");
 }

@@ -1,17 +1,18 @@
 import { z } from "zod";
 import { LINK_KINDS, SHIPMENT_STATUSES } from "@/lib/shipments/status";
 import { dateInput, optionalDateInput } from "@/lib/validation/dates";
+import { httpUrlSchema } from "@/lib/validation/url";
 
 export const shipmentItemSchema = z.object({
   name: z.string().trim().min(1).max(300),
   qty: z.number().positive().max(10_000).optional(),
   price: z.number().nonnegative().max(1_000_000_000).optional(),
-  image: z.url().optional(),
+  image: httpUrlSchema.optional(),
 });
 
 export const shipmentLinkSchema = z.object({
   label: z.string().trim().min(1).max(120),
-  url: z.url(),
+  url: httpUrlSchema,
   kind: z.enum(LINK_KINDS),
 });
 
@@ -27,7 +28,7 @@ export const shipmentWriteSchema = z.object({
   orderDate: optionalDateInput,
   carrier: optionalShort,
   trackingNumber: optionalShort,
-  trackingUrl: z.url().nullable().optional(),
+  trackingUrl: httpUrlSchema.nullable().optional(),
   status: z.enum(SHIPMENT_STATUSES).optional(),
   statusDetail: optionalText,
   eta: optionalDateInput,

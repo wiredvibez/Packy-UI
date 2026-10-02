@@ -8,8 +8,10 @@ import { requirePageSession } from "@/lib/auth/session";
 import { getDb } from "@/lib/db";
 import { isUniqueViolation } from "@/lib/db/errors";
 import { shipments } from "@/lib/db/schema";
+import { parseLinkText } from "@/lib/shipments/links";
 import { israelWallTimeToDate } from "@/lib/time/israel";
-import { LINK_KINDS, SHIPMENT_STATUSES } from "@/lib/shipments/status";
+import { normalizeHttpUrl } from "@/lib/validation/url";
+import { SHIPMENT_STATUSES } from "@/lib/shipments/status";
 import { getShipmentById } from "@/lib/shipments/queries";
 import { costToNumeric } from "@/lib/shipments/upsert";
 
@@ -29,15 +31,7 @@ function asDate(formData: FormData, key: string): Date | null {
 }
 
 function asUrl(formData: FormData, key: string): string | null {
-  const value = asOptional(formData, key);
-  if (!value) return null;
-  try {
-    const url = new URL(value);
-    if (url.protocol !== "http:" && url.protocol !== "https:") return null;
-    return url.toString();
-  } catch {
-    return null;
-  }
+  return normalizeHttpUrl(asOptional(formData, key));
 }
 
 function asBool(formData: FormData, key: string): boolean {
@@ -65,23 +59,7 @@ function parseItems(formData: FormData) {
 function parseLinks(formData: FormData) {
   const raw = asOptional(formData, "linksText");
   if (!raw) return [];
-  return raw
-    .split("\n")
-    .map((line) => line.trim())
-    .filter(Boolean)
-    .flatMap((line) => {
-      const [label, url, kind] = line.split("|").map((part) => part.trim());
-      if (!label || !url) return [];
-      const linkKind = LINK_KINDS.includes(kind as (typeof LINK_KINDS)[number])
-        ? (kind as (typeof LINK_KINDS)[number])
-        : "other";
-      try {
-        new URL(url);
-      } catch {
-        return [];
-      }
-      return [{ label, url, kind: linkKind }];
-    });
+  return parseLinkText(raw);
 }
 
 function formToValues(formData: FormData) {

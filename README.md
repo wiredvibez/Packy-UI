@@ -43,6 +43,7 @@ Scripts:
 | `PACKY_INGEST_KEY` | yes (agent) | Shared secret; send as `x-packy-key` |
 | `PACKY_PASSCODE` | yes (UI) | Yair’s login code. Hashed then compared timing-safe |
 | `SESSION_SECRET` | yes (UI) | ≥16 chars. Signs the `packy_session` httpOnly cookie |
+| `SESSION_VERSION` | no | Session claim. Defaults to `1`. Bump it and redeploy to invalidate every login |
 | `NEXT_PUBLIC_APP_URL` | no | Canonical URL for metadata |
 | `SKIP_DB_MIGRATE` | no | Set `1` to skip migrations during `next build` |
 
@@ -55,7 +56,7 @@ Default (and only) login is a passcode. There is no Google OAuth setup.
 1. Yair posts the passcode to `POST /api/auth/login`.
 2. The server hashes both the input and `PACKY_PASSCODE` with SHA-256 and compares them with `crypto.timingSafeEqual`.
 3. Login is rate-limited to 5 attempts per 15-minute window per IP. The counter is a Postgres row (`login_attempts`, keyed by a SHA-256 of the client IP and the window start) updated with `INSERT … ON CONFLICT DO UPDATE … RETURNING`, so a burst cannot skip the check and a cold start does not reset it. A successful login deletes that IP’s rows.
-4. Success sets an httpOnly, `SameSite=Lax`, HS256-signed JWT cookie (`packy_session`) via [`jose`](https://github.com/panva/jose). It expires after 30 days. A page view refreshes it once the token is at least a day old.
+4. Success sets an httpOnly, `SameSite=Lax`, HS256-signed JWT cookie (`packy_session`) via [`jose`](https://github.com/panva/jose). It expires after 30 days. A page view refreshes it once the token is at least a day old. The token carries `ver`, checked against `SESSION_VERSION` (default `1`). Set that env var to a new value and redeploy to sign Yair out everywhere without rotating `SESSION_SECRET`. Logout clears the cookie with the same `Secure` flag used at login.
 
 `proxy.ts` is the Next.js 16 request guard (renamed from `middleware.ts`). It:
 

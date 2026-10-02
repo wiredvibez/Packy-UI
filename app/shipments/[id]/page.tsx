@@ -9,6 +9,7 @@ import { StatusChip } from "@/components/StatusChip";
 import { requirePageSession } from "@/lib/auth/session";
 import { getShipmentById, listEvents } from "@/lib/shipments/queries";
 import { isUuid } from "@/lib/validation/id";
+import { normalizeHttpUrl } from "@/lib/validation/url";
 import {
   formatDateHe,
   formatDateTimeHe,
@@ -33,6 +34,7 @@ export default async function ShipmentDetailPage({
     notFound();
   }
   const events = await listEvents(id);
+  const trackingHref = normalizeHttpUrl(shipment.trackingUrl);
 
   return (
     <div className="flex min-h-full flex-col">
@@ -116,9 +118,9 @@ export default async function ShipmentDetailPage({
               {shipment.carrier ?? "משלוח"}
             </span>
             <CopyButton value={shipment.trackingNumber} compact />
-            {shipment.trackingUrl ? (
+            {trackingHref ? (
               <a
-                href={shipment.trackingUrl}
+                href={trackingHref}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="rounded-full bg-sky-soft px-3 py-1 text-sm font-medium text-sky"
@@ -133,7 +135,9 @@ export default async function ShipmentDetailPage({
           <section>
             <h2 className="mb-2 text-sm font-semibold text-ink-muted">פריטים</h2>
             <ul className="space-y-2">
-              {shipment.items.map((item) => (
+              {shipment.items.map((item) => {
+                const imageHref = normalizeHttpUrl(item.image);
+                return (
                 <li
                   key={`${item.name}-${item.qty ?? 0}`}
                   className="flex items-center justify-between rounded-2xl bg-paper-2 px-3 py-2 text-sm"
@@ -144,11 +148,11 @@ export default async function ShipmentDetailPage({
                     {item.price != null
                       ? ` · ${item.price}${shipment.currency ? ` ${shipment.currency}` : ""}`
                       : ""}
-                    {item.image?.startsWith("https://") ? (
+                    {imageHref ? (
                       <>
                         {" · "}
                         <a
-                          href={item.image}
+                          href={imageHref}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="text-sky"
@@ -159,7 +163,8 @@ export default async function ShipmentDetailPage({
                     ) : null}
                   </span>
                 </li>
-              ))}
+                );
+              })}
             </ul>
           </section>
         ) : null}

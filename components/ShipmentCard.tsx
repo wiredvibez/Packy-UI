@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { ShipmentRow } from "@/lib/db/schema";
 import { arrivalDate } from "@/lib/shipments/arrival";
+import { normalizeHttpUrl } from "@/lib/validation/url";
 import { formatDateHe, formatWindowHe, relativeTimeHe } from "@/lib/time/hebrew";
 import { CopyButton } from "@/components/CopyButton";
 import { LinkButtons } from "@/components/LinkButtons";
@@ -13,6 +14,7 @@ export function ShipmentCard({ shipment }: { shipment: ShipmentRow }) {
       ? formatWindowHe(shipment.etaStart, shipment.etaEnd)
       : formatDateHe(when);
   const relative = relativeTimeHe(when);
+  const trackingHref = normalizeHttpUrl(shipment.trackingUrl);
   const emailLinks = (shipment.links ?? []).filter(
     (link) => link.kind === "email" || link.kind === "message",
   );
@@ -67,9 +69,9 @@ export function ShipmentCard({ shipment }: { shipment: ShipmentRow }) {
         <div className="mt-3 flex flex-wrap items-center gap-2 text-sm">
           <span className="text-ink-muted">{shipment.carrier ?? "משלוח"}</span>
           <CopyButton value={shipment.trackingNumber} compact />
-          {shipment.trackingUrl ? (
+          {trackingHref ? (
             <a
-              href={shipment.trackingUrl}
+              href={trackingHref}
               target="_blank"
               rel="noopener noreferrer"
               className="rounded-full bg-sky-soft px-3 py-1 font-medium text-sky"
