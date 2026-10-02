@@ -4,7 +4,7 @@ The Packy agent talks to this app over HTTP only. Write endpoints require header
 
 `GET /api/shipments` and `GET /api/shipments/:id` also accept Yair’s signed session cookie (`packy_session`) from the dashboard.
 
-All timestamps are ISO-8601. JSON fields are camelCase.
+Timestamps are ISO-8601 **with an explicit offset or `Z`** (`2026-10-02T08:40:00+03:00`, `2026-10-01T00:00:00Z`). A date-only value (`2026-10-02`) is stored as UTC midnight. Offset-less datetimes such as `2026-10-02T10:00:00` are rejected, so a UTC server cannot shift an Israel wall time. JSON fields are camelCase.
 
 ## Auth
 
@@ -34,7 +34,7 @@ Query:
 | --- | --- |
 | `status` | Comma-separated statuses, e.g. `in_transit,customs` |
 | `active` | `true` = not archived and not delivered/returned/cancelled. `false` = archived or terminal |
-| `updatedSince` | ISO datetime; only rows with `updatedAt >=` this value |
+| `updatedSince` | ISO datetime with offset or `Z`; only rows with `updatedAt >=` this value |
 
 ```bash
 curl -sS "https://YOUR_DOMAIN/api/shipments?active=true" \
@@ -122,7 +122,7 @@ curl -sS -X PATCH "https://YOUR_DOMAIN/api/shipments/SHIPMENT_ID" \
 
 `POST /api/shipments/:id/events`
 
-If `status` is set, the shipment status is updated to match.
+If `status` is set and `at` is at least as recent as the latest stored event, the shipment status is updated to match. An older backfilled event is stored and does not roll the status backward. The insert and the status write are one statement.
 
 ```bash
 curl -sS -X POST "https://YOUR_DOMAIN/api/shipments/SHIPMENT_ID/events" \

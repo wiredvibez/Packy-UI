@@ -8,11 +8,31 @@ describe("safe next path", () => {
     expect(safeNextPath("/shipments/abc")).toBe("/shipments/abc");
   });
 
+  it("keeps search and hash", () => {
+    expect(safeNextPath("/shipments/abc?q=1#code")).toBe(
+      "/shipments/abc?q=1#code",
+    );
+  });
+
   it("drops open redirects", () => {
     expect(safeNextPath("https://evil.example")).toBe("/");
     expect(safeNextPath("//evil.example")).toBe("/");
     expect(safeNextPath("/\\evil.example")).toBe("/");
     expect(safeNextPath(null)).toBe("/");
+  });
+
+  it("drops tab, backslash, and encoded bypasses", () => {
+    const fromQuery = (raw: string) =>
+      new URL(`http://localhost/login?next=${raw}`).searchParams.get("next");
+
+    expect(safeNextPath("/\t/evil.com")).toBe("/");
+    expect(safeNextPath("/\\evil.com")).toBe("/");
+    expect(safeNextPath("/\\/evil.com")).toBe("/");
+    expect(safeNextPath(fromQuery("/%09/evil.com"))).toBe("/");
+    expect(safeNextPath(fromQuery("/%5Cevil.com"))).toBe("/");
+    expect(safeNextPath(fromQuery("/%5C/evil.com"))).toBe("/");
+    expect(safeNextPath(fromQuery("//evil.com"))).toBe("/");
+    expect(safeNextPath(fromQuery("/%0d%0a/evil.com"))).toBe("/");
   });
 });
 

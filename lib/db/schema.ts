@@ -2,10 +2,12 @@ import { relations } from "drizzle-orm";
 import {
   boolean,
   index,
+  integer,
   jsonb,
   numeric,
   pgEnum,
   pgTable,
+  primaryKey,
   text,
   timestamp,
   uuid,
@@ -86,6 +88,19 @@ export const shipmentEvents = pgTable(
   (table) => [
     index("shipment_events_shipment_id_idx").on(table.shipmentId),
     index("shipment_events_at_idx").on(table.at),
+  ],
+);
+
+/** Failed passcode attempts, shared across serverless instances. */
+export const loginAttempts = pgTable(
+  "login_attempts",
+  {
+    ipHash: text("ip_hash").notNull(),
+    windowStart: timestamp("window_start", { withTimezone: true }).notNull(),
+    count: integer("count").notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.ipHash, table.windowStart] }),
   ],
 );
 

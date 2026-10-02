@@ -2,7 +2,10 @@ import { NextResponse, type NextRequest } from "next/server";
 import { verifyIngestKey, readIngestKey } from "@/lib/auth/ingest";
 import { isPublicPath, isReadApiPath } from "@/lib/auth/paths";
 import {
+  createSessionToken,
+  readSession,
   SESSION_COOKIE,
+  sessionCookieOptions,
   verifySessionToken,
 } from "@/lib/auth/session";
 
@@ -33,13 +36,22 @@ export async function proxy(request: NextRequest) {
   }
 
   const token = request.cookies.get(SESSION_COOKIE)?.value;
-  if (!(await verifySessionToken(token))) {
+  const session = await readSession(token);
+  if (!session.valid) {
     const login = new URL("/login", request.url);
     login.searchParams.set("next", pathname);
     return NextResponse.redirect(login);
   }
 
-  return NextResponse.next();
+  const response = NextResponse.next();
+  if (session.refresh) {
+    response.cookies.set(
+      SESSION_COOKIE,
+      await createSessionToken(),
+      sessionCookieOptions(),
+    );
+  }
+  return response;
 }
 
 export const config = {

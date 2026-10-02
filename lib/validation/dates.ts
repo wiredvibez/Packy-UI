@@ -1,29 +1,13 @@
 import { z } from "zod";
 
-function toDate(value: Date | string): Date {
-  const date = value instanceof Date ? value : new Date(value);
-  if (Number.isNaN(date.getTime())) {
-    throw new Error("invalid_date");
-  }
-  return date;
-}
-
+/**
+ * Agent timestamps must say which zone they are.
+ * Offset-less datetimes are rejected so Vercel (UTC) cannot shift Israel
+ * wall times by 2–3 hours. A plain date is UTC midnight.
+ */
 export const dateInput = z
-  .union([
-    z.date(),
-    z.iso.datetime({ offset: true }),
-    z.iso.datetime(),
-    z.iso.date(),
-    z.string().min(8).max(40),
-  ])
-  .transform((value, ctx) => {
-    try {
-      return toDate(value);
-    } catch {
-      ctx.addIssue({ code: "custom", message: "invalid_date" });
-      return z.NEVER;
-    }
-  });
+  .union([z.iso.datetime({ offset: true }), z.iso.date()])
+  .transform((value) => new Date(value));
 
 export const optionalDateInput = z
   .union([dateInput, z.null(), z.literal("")])

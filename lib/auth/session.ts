@@ -3,6 +3,7 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
 export const SESSION_COOKIE = "packy_session";
+/** 30 days. Page views slide it forward after the token is a day old. */
 export const SESSION_MAX_AGE_SEC = 60 * 60 * 24 * 30;
 const SESSION_SUBJECT = "yair";
 
@@ -30,22 +31,43 @@ export async function createSessionToken(): Promise<string> {
     .sign(secret);
 }
 
+const REFRESH_AFTER_SEC = 60 * 60 * 24;
+
+type SessionPayload = {
+  valid: true;
+  refresh: boolean;
+};
+
+async function readToken(token: string | undefined | null) {
+  if (!token) return null;
+  const secret = getSessionSecret();
+  if (!secret) return null;
+  try {
+    const { payload } = await jwtVerify(token, secret, {
+      algorithms: ["HS256"],
+    });
+    if (payload.sub !== SESSION_SUBJECT) return null;
+    return payload;
+  } catch {
+    return null;
+  }
+}
+
 export async function verifySessionToken(
   token: string | undefined | null,
 ): Promise<boolean> {
-  if (!token) {
-    return false;
-  }
-  const secret = getSessionSecret();
-  if (!secret) {
-    return false;
-  }
-  try {
-    const { payload } = await jwtVerify(token, secret);
-    return payload.sub === SESSION_SUBJECT;
-  } catch {
-    return false;
-  }
+  return (await readToken(token)) !== null;
+}
+
+/** Valid session, plus whether the 30-day cookie should slide forward. */
+export async function readSession(
+  token: string | undefined | null,
+): Promise<SessionPayload | { valid: false }> {
+  const payload = await readToken(token);
+  if (!payload) return { valid: false };
+  const issuedAt = payload.iat ?? 0;
+  const age = Math.floor(Date.now() / 1000) - issuedAt;
+  return { valid: true, refresh: age >= REFRESH_AFTER_SEC };
 }
 
 export function sessionCookieOptions() {

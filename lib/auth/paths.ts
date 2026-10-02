@@ -14,11 +14,33 @@ export function isWriteApiPath(pathname: string): boolean {
   return pathname.startsWith("/api/shipments");
 }
 
+const SAFE_ORIGIN = "http://x";
+
+/**
+ * Keep post-login navigation on this site.
+ * `new URL` is what the browser uses, so tab/backslash tricks that change
+ * the host are rejected instead of trusted as a path.
+ */
 export function safeNextPath(value: string | null | undefined): string {
   if (!value) return "/";
-  if (!value.startsWith("/") || value.startsWith("//")) return "/";
-  if (value.includes("\\") || value.includes("://") || value.includes("\0")) {
+
+  let url: URL;
+  try {
+    url = new URL(value, `${SAFE_ORIGIN}/`);
+  } catch {
     return "/";
   }
-  return value;
+  if (url.origin !== SAFE_ORIGIN) return "/";
+
+  const next = `${url.pathname}${url.search}${url.hash}`;
+  if (!next.startsWith("/") || next.startsWith("//")) return "/";
+
+  try {
+    const again = new URL(next, `${SAFE_ORIGIN}/`);
+    if (again.origin !== SAFE_ORIGIN) return "/";
+  } catch {
+    return "/";
+  }
+
+  return next;
 }

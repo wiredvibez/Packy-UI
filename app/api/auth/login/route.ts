@@ -3,11 +3,9 @@ import { z } from "zod";
 import { jsonError, readJsonBody, zodErrorResponse } from "@/lib/api/errors";
 import { verifyPasscode } from "@/lib/auth/passcode";
 import {
-  clearRateLimit,
+  clearLoginAttempts,
+  consumeLoginAttempt,
   getClientIp,
-  LOGIN_RATE_LIMIT,
-  readRateLimit,
-  recordFailedAttempt,
 } from "@/lib/auth/rate-limit";
 import {
   createSessionToken,
@@ -23,12 +21,6 @@ const loginSchema = z.object({
 
 export async function POST(request: NextRequest) {
   const ip = getClientIp(request.headers);
-  const limited = readRateLimit(ip);
-  if (!limited.ok) {
-    return jsonError(429, "too_many_attempts", {
-      retryAfterSec: limited.retryAfterSec,
-    });
-  }
 
   const body = await readJsonBody(request);
   if (!body.ok) {
@@ -40,18 +32,28 @@ export async function POST(request: NextRequest) {
     return zodErrorResponse(parsed.error);
   }
 
+  let attempt: { ok: boolean; retryAfterSec: number };
+  try {
+    attempt = await consumeLoginAttempt(ip);
+  } catch (error) {
+    console.error("login rate limit failed", error);
+    return jsonError(503, "rate_limit_unavailable");
+  }
+  if (!attempt.ok) {
+    return jsonError(429, "too_many_attempts", {
+      retryAfterSec: attempt.retryAfterSec,
+    });
+  }
+
   if (!verifyPasscode(parsed.data.passcode)) {
-    const after = recordFailedAttempt(ip);
-    if (!after.ok) {
-      return jsonError(429, "too_many_attempts", {
-        retryAfterSec: after.retryAfterSec,
-        maxAttempts: LOGIN_RATE_LIMIT.maxAttempts,
-      });
-    }
     return jsonError(401, "invalid_passcode");
   }
 
-  clearRateLimit(ip);
+  try {
+    await clearLoginAttempts(ip);
+  } catch (error) {
+    console.error("failed to reset login attempts", error);
+  }
   let token: string;
   try {
     token = await createSessionToken();

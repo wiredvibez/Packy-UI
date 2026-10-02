@@ -34,6 +34,39 @@ describe("shipment validation", () => {
     expect(result.success).toBe(false);
   });
 
+  it("rejects offset-less datetimes and slash dates", () => {
+    expect(
+      shipmentCreateSchema.safeParse({
+        externalKey: "x",
+        title: "y",
+        eta: "2026-10-02T10:00:00",
+      }).success,
+    ).toBe(false);
+    expect(
+      shipmentCreateSchema.safeParse({
+        externalKey: "x",
+        title: "y",
+        eta: "02/10/2026",
+      }).success,
+    ).toBe(false);
+  });
+
+  it("accepts Z, numeric offsets, and plain dates", () => {
+    const withZ = shipmentCreateSchema.parse({
+      externalKey: "x",
+      title: "y",
+      eta: "2026-10-01T00:00:00.000Z",
+    });
+    expect(withZ.eta?.toISOString()).toBe("2026-10-01T00:00:00.000Z");
+
+    const dateOnly = shipmentCreateSchema.parse({
+      externalKey: "x",
+      title: "y",
+      orderDate: "2026-10-02",
+    });
+    expect(dateOnly.orderDate?.toISOString()).toBe("2026-10-02T00:00:00.000Z");
+  });
+
   it("parses list filters", () => {
     const parsed = shipmentListQuerySchema.parse({
       status: "in_transit,customs",

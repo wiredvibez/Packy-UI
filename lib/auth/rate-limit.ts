@@ -1,25 +1,15 @@
+import { eq, sql } from "drizzle-orm";
+import { sha256Buffer } from "@/lib/auth/crypto";
+import { getDb } from "@/lib/db";
+import { loginAttempts } from "@/lib/db/schema";
+
 const WINDOW_MS = 15 * 60 * 1000;
 const MAX_ATTEMPTS = 5;
-
-type Bucket = { count: number; resetAt: number };
-
-const buckets = new Map<string, Bucket>();
 
 export const LOGIN_RATE_LIMIT = {
   windowMs: WINDOW_MS,
   maxAttempts: MAX_ATTEMPTS,
 } as const;
-
-function sweep(now: number) {
-  if (buckets.size < 200) {
-    return;
-  }
-  for (const [key, bucket] of buckets) {
-    if (now > bucket.resetAt) {
-      buckets.delete(key);
-    }
-  }
-}
 
 export function getClientIp(headers: Headers): string {
   const real = headers.get("x-real-ip")?.trim();
@@ -35,57 +25,63 @@ export function getClientIp(headers: Headers): string {
   return "unknown";
 }
 
-export function readRateLimit(key: string): {
-  ok: boolean;
-  remaining: number;
-  retryAfterSec: number;
-} {
-  const now = Date.now();
-  sweep(now);
-  const bucket = buckets.get(key);
-  if (!bucket || now > bucket.resetAt) {
-    return { ok: true, remaining: MAX_ATTEMPTS, retryAfterSec: 0 };
-  }
-  if (bucket.count >= MAX_ATTEMPTS) {
-    return {
-      ok: false,
-      remaining: 0,
-      retryAfterSec: Math.max(1, Math.ceil((bucket.resetAt - now) / 1000)),
-    };
+export function hashClientIp(ip: string): string {
+  return sha256Buffer(ip).toString("hex");
+}
+
+export function rateLimitDecision(
+  count: number,
+  windowStart: Date,
+  now = Date.now(),
+): { ok: boolean; remaining: number; retryAfterSec: number } {
+  const retryAfterSec = Math.max(
+    1,
+    Math.ceil((windowStart.getTime() + WINDOW_MS - now) / 1000),
+  );
+  if (count > MAX_ATTEMPTS) {
+    return { ok: false, remaining: 0, retryAfterSec };
   }
   return {
     ok: true,
-    remaining: MAX_ATTEMPTS - bucket.count,
+    remaining: MAX_ATTEMPTS - count,
     retryAfterSec: 0,
   };
 }
 
-export function recordFailedAttempt(key: string): {
-  ok: boolean;
-  remaining: number;
-  retryAfterSec: number;
-} {
-  const now = Date.now();
-  const existing = buckets.get(key);
-  if (!existing || now > existing.resetAt) {
-    buckets.set(key, { count: 1, resetAt: now + WINDOW_MS });
-    return { ok: true, remaining: MAX_ATTEMPTS - 1, retryAfterSec: 0 };
+/**
+ * Increment first, in one statement, then the caller rejects when over max.
+ * The row is shared by every Vercel instance.
+ */
+export async function consumeLoginAttempt(ip: string) {
+  const ipHash = hashClientIp(ip);
+  const db = getDb();
+  const [row] = await db
+    .insert(loginAttempts)
+    .values({
+      ipHash,
+      windowStart: sql`date_bin('15 minutes', now(), timestamptz '2000-01-01 00:00:00+00')`,
+      count: 1,
+    })
+    .onConflictDoUpdate({
+      target: [loginAttempts.ipHash, loginAttempts.windowStart],
+      set: { count: sql`${loginAttempts.count} + 1` },
+    })
+    .returning({
+      count: loginAttempts.count,
+      windowStart: loginAttempts.windowStart,
+    });
+
+  if (!row) {
+    throw new Error("login attempt was not recorded");
   }
-  existing.count += 1;
-  if (existing.count >= MAX_ATTEMPTS) {
-    return {
-      ok: false,
-      remaining: 0,
-      retryAfterSec: Math.max(1, Math.ceil((existing.resetAt - now) / 1000)),
-    };
-  }
-  return {
-    ok: true,
-    remaining: MAX_ATTEMPTS - existing.count,
-    retryAfterSec: 0,
-  };
+  const windowStart =
+    row.windowStart instanceof Date
+      ? row.windowStart
+      : new Date(String(row.windowStart));
+  return rateLimitDecision(row.count, windowStart);
 }
 
-export function clearRateLimit(key: string) {
-  buckets.delete(key);
+export async function clearLoginAttempts(ip: string) {
+  const db = getDb();
+  await db.delete(loginAttempts).where(eq(loginAttempts.ipHash, hashClientIp(ip)));
 }

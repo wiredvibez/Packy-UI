@@ -54,8 +54,8 @@ Default (and only) login is a passcode. There is no Google OAuth setup.
 
 1. Yair posts the passcode to `POST /api/auth/login`.
 2. The server hashes both the input and `PACKY_PASSCODE` with SHA-256 and compares them with `crypto.timingSafeEqual`.
-3. Login is rate-limited to 5 attempts / 15 minutes per IP (in-memory; best-effort across serverless instances).
-4. Success sets an httpOnly, `SameSite=Lax`, signed JWT cookie (`packy_session`) via [`jose`](https://github.com/panva/jose). Valid 30 days.
+3. Login is rate-limited to 5 attempts per 15-minute window per IP. The counter is a Postgres row (`login_attempts`, keyed by a SHA-256 of the client IP and the window start) updated with `INSERT … ON CONFLICT DO UPDATE … RETURNING`, so a burst cannot skip the check and a cold start does not reset it. A successful login deletes that IP’s rows.
+4. Success sets an httpOnly, `SameSite=Lax`, HS256-signed JWT cookie (`packy_session`) via [`jose`](https://github.com/panva/jose). It expires after 30 days. A page view refreshes it once the token is at least a day old.
 
 `proxy.ts` is the Next.js 16 request guard (renamed from `middleware.ts`). It:
 
